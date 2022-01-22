@@ -3,12 +3,23 @@
     "displayName": "Unity Find In Prefabs",
     "description": "",
     "version": "1.0.0",
+    "publisher": "jarvisjiang",
+    "author": {
+        "name": "Jarvis Jiang",
+        "email": "jiang115jie@gmail.com"
+    },
     "repository": "https://github.com/JiangJie/unity-find-in-prefabs",
     "engines": {
         "vscode": "^1.63.0"
     },
     "categories": [
         "Other"
+    ],
+    "keywords": [
+        "unify",
+        "prefab",
+        "csharp",
+        "C#"
     ],
     "activationEvents": [
         "onCommand:unity-find-in-prefabs"
