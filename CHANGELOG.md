@@ -1,9 +1,9 @@
 # Change Log
 
-All notable changes to the "unity-find-in-prefabs" extension will be documented in this file.
+## 1.0.0
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+* 支持查找C#脚本被哪些prefab文件引用。
 
-## [Unreleased]
+## 1.0.1
 
-- Initial release
+* 即使`files.exclude`包含`prefab`文件，现在也能正确查找到了。
