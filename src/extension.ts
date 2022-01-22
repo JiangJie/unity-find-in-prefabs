@@ -47,7 +47,7 @@ export const activate = (context: vscode.ExtensionContext) => {
         }
 
         // get all prefab files
-        const files = await vscode.workspace.findFiles('**/*.prefab');
+        const files = await vscode.workspace.findFiles('**/*.prefab', null);
         // map then filtered files
         const findedPrefabFiles = (await Promise.all(files.map(async file => {
             const doc = await vscode.workspace.openTextDocument(file);
