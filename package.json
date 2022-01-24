@@ -38,6 +38,11 @@
                     "when": "editorFocus",
                     "command": "unity-find-in-prefabs"
                 }
+            ],
+            "editor/title/context": [
+                {
+                    "command": "unity-find-in-prefabs"
+                }
             ]
         }
     },
