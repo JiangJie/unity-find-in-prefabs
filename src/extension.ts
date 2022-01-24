@@ -1,10 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
+import * as fs from 'fs';
+import * as readline from 'readline';
 import * as vscode from 'vscode';
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
-export const activate = async (context: vscode.ExtensionContext) => {
+export const activate = (context: vscode.ExtensionContext) => {
 
     // Use the console to output diagnostic information (console.log) and errors (console.error)
     // This line of code will only be executed once when your extension is activated
@@ -21,37 +23,37 @@ export const activate = async (context: vscode.ExtensionContext) => {
 
         // get all prefab files
         const files = await vscode.workspace.findFiles('**/*.prefab', null);
-        let doneCount = 0;
-
-        files.forEach(async file => {
-            let doc: vscode.TextDocument;
-
+        for await (const file of files) {
+            // cut first char '/'
+            const filePath = file.path.slice(1);
             try {
-                doc = await vscode.workspace.openTextDocument(file);
-            } catch (err: any) {
-                console.error(`Error from unity-find-in-prefabs when makeCache:\n${ err.message }`);
-                return;
-            }
+                const reader = fs.createReadStream(filePath);
+                const rl = readline.createInterface({
+                    input: reader,
+                    crlfDelay: Infinity
+                });
+                // Note: we use the crlfDelay option to recognize all instances of CR LF
+                // ('\r\n') in input.txt as a single line break.
+                for await (const line of rl) {
+                    const matcher = line.match(guidReg);
+                    if (!matcher) continue;
 
-            // get guids
-            const lines = doc.getText().split(doc.eol === vscode.EndOfLine.LF ? '\n' : '\r\n');
-            lines.forEach(x => {
-                const matcher = x.match(guidReg);
-                if (!matcher) return;
-
-                const guid = matcher[1];
-                if (guidWithinPrefabs.has(guid)) {
-                    guidWithinPrefabs.get(guid)!.add(file.path);
-                } else {
-                    guidWithinPrefabs.set(guid, new Set([file.path]));
+                    const guid = matcher[1];
+                    if (guidWithinPrefabs.has(guid)) {
+                        guidWithinPrefabs.get(guid)!.add(filePath);
+                    } else {
+                        guidWithinPrefabs.set(guid, new Set([filePath]));
+                    }
                 }
-            });
-
-            doneCount += 1;
-            if (doneCount === files.length - 10) {
-                cacheMade = true;
+            } catch (err: any) {
+                console.error(`Error from unity-find-in-prefabs when open prefab file ${ filePath }:\n${ err.message }`);
             }
-        });
+        }
+
+        cacheMade = true;
+
+        // notify make cache complete
+        vscode.window.showInformationMessage('Make cache complete. You can find again.');
     };
 
     makeCache();
