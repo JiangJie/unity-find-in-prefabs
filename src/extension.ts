@@ -1,13 +1,16 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as fs from 'fs';
+import * as path from 'path';
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 
+const PrefabSuffix = '.prefab';
+const MetaSuffix = '.meta';
 // the regexp of match script guid in prefab file
-const prefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
+const PrefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
 // the regexp of match guid in meta file
-const metaGUIDReg = /(?:^|\s*)guid\s*:\s*([0-9a-f]{32})(?:\s*|$)/;
+const MetaGUIDReg = /(?:^|\s*)guid\s*:\s*([0-9a-f]{32})(?:\s*|$)/;
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -22,9 +25,12 @@ export const activate = (context: vscode.ExtensionContext) => {
     // cache <script guid, the uri prefab file>
     const guidWithinPrefabs: Map<string, Set<vscode.Uri>> = new Map();
 
+    /**
+     * make guid and prefab files map cache
+     */
     const makeCache = async () => {
         // get all prefab files
-        const uris = await vscode.workspace.findFiles('**/*.prefab', null);
+        const uris = await vscode.workspace.findFiles(`**/*${ PrefabSuffix }`, null);
         for await (const uri of uris) {
             try {
                 const reader = fs.createReadStream(uri.fsPath);
@@ -35,7 +41,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                 // Note: we use the crlfDelay option to recognize all instances of CR LF
                 // ('\r\n') in input.txt as a single line break.
                 for await (const line of rl) {
-                    const matcher = line.match(prefabScriptGUIDReg);
+                    const matcher = line.match(PrefabScriptGUIDReg);
                     if (!matcher) continue;
 
                     const guid = matcher[1];
@@ -56,7 +62,34 @@ export const activate = (context: vscode.ExtensionContext) => {
         vscode.window.showInformationMessage('Make cache complete. You can find again.');
     };
 
-    makeCache();
+    /**
+     * get the C# file's guid
+     */
+    const getGUIDOfActiveCsharpFile = async () => {
+        // mabey file not exist
+        try {
+            // read the right meta file of the C# file
+            const reader = fs.createReadStream(`${ vscode.window.activeTextEditor!.document.uri.fsPath }${ MetaSuffix }`);
+            const rl = readline.createInterface({
+                input: reader,
+                crlfDelay: Infinity
+            });
+
+            for await (const line of rl) {
+                const matcher = line.match(MetaGUIDReg);
+                if (matcher) return matcher[1];
+            }
+
+            return null;
+        } catch (err: any) {
+            console.error(`Error from unity-find-in-prefabs when open meta file:\n${ err.message }`);
+        }
+    };
+
+    /**
+     * get the C# file's name
+     */
+    const getFileNameOfCsharpFile = () => path.basename(vscode.window.activeTextEditor!.document.uri.fsPath);
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
@@ -78,31 +111,12 @@ export const activate = (context: vscode.ExtensionContext) => {
             return;
         }
 
-        let guid: string = '';
-
-        // mabey file not exist
-        try {
-            // read the right meta file of the C# file
-            const reader = fs.createReadStream(`${ document.uri.path }.meta`.slice(1));
-            const rl = readline.createInterface({
-                input: reader,
-                crlfDelay: Infinity
-            });
-
-            for await (const line of rl) {
-                const matcher = line.match(metaGUIDReg);
-                if (!matcher) continue;
-
-                guid = matcher[1];
-                break;
-            }
-        } catch (err: any) {
-            console.error(`Error from unity-find-in-prefabs when open meta file:\n${ err.message }`);
+        const guid = await getGUIDOfActiveCsharpFile();
+        if (guid === undefined) {
             vscode.window.showErrorMessage(`Can't find the right meta file of the C# file!`);
             return;
         }
-
-        if (!guid) {
+        if (guid === null) {
             vscode.window.showErrorMessage(`GUID of the C# file error!`);
             return;
         }
@@ -113,26 +127,32 @@ export const activate = (context: vscode.ExtensionContext) => {
         }
 
         // show result in quick pick view
-        // filename folder
+        // filename as label
+        // folder as description
         const selected = await vscode.window.showQuickPick([...guidWithinPrefabs.get(guid)!].map(uri => {
-            const fielPath = vscode.workspace.asRelativePath(uri.path);
-            const index = fielPath.lastIndexOf('/');
+            const filePath = vscode.workspace.asRelativePath(uri.path);
+            const index = filePath.lastIndexOf('/');
             return {
-                label: index === -1 ? fielPath : fielPath.slice(index + 1),
-                description: index === -1 ? '' : fielPath.slice(0, index),
-                uri
+                label: index === -1 ? filePath : filePath.slice(index + 1),
+                description: index === -1 ? '' : filePath.slice(0, index)
+                // uri
             };
         }), {
-            title: 'Found Prefabs',
-            placeHolder: 'Select a file to open',
+            title: `${ getFileNameOfCsharpFile() } be dependent by`,
+            placeHolder: 'Select to copy a file name then you can open in Unity.',
             canPickMany: false
         });
 
         if (!selected) return;
 
         // open the file
-        vscode.window.showTextDocument(selected.uri);
+        // vscode.window.showTextDocument(selected.uri);
+
+        // copy file name to clipboard
+        vscode.env.clipboard.writeText(selected.label);
     });
+
+    makeCache();
 
     context.subscriptions.push(disposable);
 }
