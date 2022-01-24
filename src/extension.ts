@@ -4,6 +4,11 @@ import * as fs from 'fs';
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 
+// the regexp of match script guid in prefab file
+const prefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
+// the regexp of match guid in meta file
+const metaGUIDReg = /(?:^|\s*)guid\s*:\s*([0-9a-f]{32})(?:\s*|$)/;
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export const activate = (context: vscode.ExtensionContext) => {
@@ -14,20 +19,15 @@ export const activate = (context: vscode.ExtensionContext) => {
 
     // whether cache has been made
     let cacheMade = false;
-    // cache <script guid, prefab[]>
-    const guidWithinPrefabs: Map<string, Set<string>> = new Map();
+    // cache <script guid, the uri prefab file>
+    const guidWithinPrefabs: Map<string, Set<vscode.Uri>> = new Map();
 
     const makeCache = async () => {
-        // the regexp of match guid
-        const guidReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
-
         // get all prefab files
-        const files = await vscode.workspace.findFiles('**/*.prefab', null);
-        for await (const file of files) {
-            // cut first char '/'
-            const filePath = file.path.slice(1);
+        const uris = await vscode.workspace.findFiles('**/*.prefab', null);
+        for await (const uri of uris) {
             try {
-                const reader = fs.createReadStream(filePath);
+                const reader = fs.createReadStream(uri.fsPath);
                 const rl = readline.createInterface({
                     input: reader,
                     crlfDelay: Infinity
@@ -35,18 +35,18 @@ export const activate = (context: vscode.ExtensionContext) => {
                 // Note: we use the crlfDelay option to recognize all instances of CR LF
                 // ('\r\n') in input.txt as a single line break.
                 for await (const line of rl) {
-                    const matcher = line.match(guidReg);
+                    const matcher = line.match(prefabScriptGUIDReg);
                     if (!matcher) continue;
 
                     const guid = matcher[1];
                     if (guidWithinPrefabs.has(guid)) {
-                        guidWithinPrefabs.get(guid)!.add(filePath);
+                        guidWithinPrefabs.get(guid)!.add(uri);
                     } else {
-                        guidWithinPrefabs.set(guid, new Set([filePath]));
+                        guidWithinPrefabs.set(guid, new Set([uri]));
                     }
                 }
             } catch (err: any) {
-                console.error(`Error from unity-find-in-prefabs when open prefab file ${ filePath }:\n${ err.message }`);
+                console.error(`Error from unity-find-in-prefabs when open prefab file ${ uri.fsPath }:\n${ err.message }`);
             }
         }
 
@@ -63,7 +63,6 @@ export const activate = (context: vscode.ExtensionContext) => {
     // The commandId parameter must match the command field in package.json
     const disposable = vscode.commands.registerCommand('unity-find-in-prefabs', async () => {
         // The code you place here will be executed every time your command is executed
-        // Display a message box to the user
         const { activeTextEditor } = vscode.window;
         if (!activeTextEditor) return;
 
@@ -74,28 +73,37 @@ export const activate = (context: vscode.ExtensionContext) => {
             return;
         }
 
-        // get the right meta file path of the C# file
-        const metaPath = `${ document.uri.path }.meta`;
-        // read the meta file
-        let metaDoc = null;
+        if (!cacheMade) {
+            vscode.window.showInformationMessage('Please wait for making cache.');
+            return;
+        }
+
+        let guid: string = '';
+
         // mabey file not exist
         try {
-            metaDoc = await vscode.workspace.openTextDocument(metaPath);
+            // read the right meta file of the C# file
+            const reader = fs.createReadStream(`${ document.uri.path }.meta`.slice(1));
+            const rl = readline.createInterface({
+                input: reader,
+                crlfDelay: Infinity
+            });
+
+            for await (const line of rl) {
+                const matcher = line.match(metaGUIDReg);
+                if (!matcher) continue;
+
+                guid = matcher[1];
+                break;
+            }
         } catch (err: any) {
             console.error(`Error from unity-find-in-prefabs when open meta file:\n${ err.message }`);
             vscode.window.showErrorMessage(`Can't find the right meta file of the C# file!`);
             return;
         }
 
-        // get the guid from file content
-        const guid = (metaDoc.getText().match(/\n?guid:\s+([0-9a-f]{32})\n/) || [])[1];
         if (!guid) {
             vscode.window.showErrorMessage(`GUID of the C# file error!`);
-            return;
-        }
-
-        if (!cacheMade) {
-            vscode.window.showInformationMessage('Please wait for making cache.');
             return;
         }
 
@@ -104,8 +112,26 @@ export const activate = (context: vscode.ExtensionContext) => {
             return;
         }
 
-        // show result
-        vscode.window.showInformationMessage(`Find files:\n${ [...guidWithinPrefabs.get(guid)!].join('\n') }`);
+        // show result in quick pick view
+        // filename folder
+        const selected = await vscode.window.showQuickPick([...guidWithinPrefabs.get(guid)!].map(uri => {
+            const fielPath = vscode.workspace.asRelativePath(uri.path);
+            const index = fielPath.lastIndexOf('/');
+            return {
+                label: index === -1 ? fielPath : fielPath.slice(index + 1),
+                description: index === -1 ? '' : fielPath.slice(0, index),
+                uri
+            };
+        }), {
+            title: 'Found Prefabs',
+            placeHolder: 'Select a file to open',
+            canPickMany: false
+        });
+
+        if (!selected) return;
+
+        // open the file
+        vscode.window.showTextDocument(selected.uri);
     });
 
     context.subscriptions.push(disposable);
