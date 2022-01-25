@@ -237,11 +237,70 @@ const getGUIDOfActiveCsharpFile = async () => {
  */
 const getFileNameOfCsharpFile = () => path.basename(vscode.window.activeTextEditor!.document.uri.fsPath);
 
-const createWatcher = () => {
+/**
+ * watch all prefab files change in workspace
+ */
+const watchAllPrefabFiles = () => {
     const watcher = vscode.workspace.createFileSystemWatcher(AllPrefabsPattern);
     watcher.onDidCreate(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
     watcher.onDidChange(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
     watcher.onDidDelete(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, true));
+};
+
+/**
+ * create a quick pick view to show results
+ */
+const showQuickPickByGUID = (guid: string) => {
+    interface WithFilePathQuickPickItem extends vscode.QuickPickItem {
+        filePath: string;
+    }
+
+    const qucikPick = vscode.window.createQuickPick<WithFilePathQuickPickItem>();
+    let selectedLabel: string | null = null;
+
+    qucikPick.items = [...GUIDWithinPrefabs.get(guid)!].map(filePath => {
+        const relativePath = vscode.workspace.asRelativePath(filePath);
+        let dirname = path.dirname(relativePath);
+        dirname === '.' && (dirname = '');
+
+        // filename as label
+        // folder as description
+        return {
+            label: path.basename(relativePath),
+            description: dirname,
+            buttons: [{
+                iconPath: new vscode.ThemeIcon('open-preview'),
+                tooltip: 'Open Preview'
+            }],
+            filePath
+        };
+    });
+
+    qucikPick.canSelectMany = false;
+    qucikPick.matchOnDescription = true;
+    qucikPick.title = `${ getFileNameOfCsharpFile() } be dependent by`;
+    qucikPick.placeholder = 'Select to copy a file name then you can open in Unity.';
+
+    qucikPick.onDidHide(() => {
+        selectedLabel = null;
+        qucikPick.dispose();
+    });
+    qucikPick.onDidChangeSelection(items => selectedLabel = items[0].label);
+    qucikPick.onDidAccept(() => {
+        if (selectedLabel) {
+            // copy file name(not include extname) to clipboard
+            vscode.env.clipboard.writeText(path.basename(selectedLabel, path.extname(selectedLabel)));
+        }
+
+        qucikPick.hide();
+    });
+    // open the file preview
+    qucikPick.onDidTriggerItemButton(event => {
+        // TODO: if(preview button)
+        vscode.window.showTextDocument(vscode.Uri.file(event.item.filePath));
+    });
+
+    qucikPick.show();
 };
 
 // this method is called when your extension is activated
@@ -251,7 +310,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     console.log('Unity: Find C# In Prefabs is now active!');
 
     buildCache();
-    createWatcher();
+    watchAllPrefabFiles();
 
     // The command has been defined in the package.json file
     // Now provide the implementation of the command with registerCommand
@@ -289,31 +348,7 @@ export const activate = (context: vscode.ExtensionContext) => {
         }
 
         // show result in quick pick view
-        // filename as label
-        // folder as description
-        const selected = await vscode.window.showQuickPick([...GUIDWithinPrefabs.get(guid)!].map(filePath => {
-            const relativePath = vscode.workspace.asRelativePath(filePath);
-            let dirname = path.dirname(relativePath);
-            dirname === '.' && (dirname = '');
-
-            return {
-                label: path.basename(relativePath),
-                description: dirname,
-                // uri
-            };
-        }), {
-            title: `${ getFileNameOfCsharpFile() } be dependent by`,
-            placeHolder: 'Select to copy a file name then you can open in Unity.',
-            canPickMany: false
-        });
-
-        if (!selected) return;
-
-        // open the file
-        // vscode.window.showTextDocument(selected.uri);
-
-        // copy file name(not include extname) to clipboard
-        vscode.env.clipboard.writeText(path.basename(selected.label, path.extname(selected.label)));
+        showQuickPickByGUID(guid);
     });
 
     context.subscriptions.push(disposable);
