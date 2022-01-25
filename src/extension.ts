@@ -157,8 +157,8 @@ export const activate = (context: vscode.ExtensionContext) => {
         // open the file
         // vscode.window.showTextDocument(selected.uri);
 
-        // copy file name to clipboard
-        vscode.env.clipboard.writeText(selected.label);
+        // copy file name(not include extname) to clipboard
+        vscode.env.clipboard.writeText(path.basename(selected.label, path.extname(selected.label)));
     });
 
     context.subscriptions.push(disposable);
