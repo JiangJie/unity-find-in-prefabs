@@ -293,9 +293,12 @@ export const activate = (context: vscode.ExtensionContext) => {
         // folder as description
         const selected = await vscode.window.showQuickPick([...GUIDWithinPrefabs.get(guid)!].map(filePath => {
             const relativePath = vscode.workspace.asRelativePath(filePath);
+            let dirname = path.dirname(relativePath);
+            dirname === '.' && (dirname = '');
+
             return {
                 label: path.basename(relativePath),
-                description: path.dirname(relativePath)
+                description: dirname,
                 // uri
             };
         }), {
