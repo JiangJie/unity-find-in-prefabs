@@ -33,6 +33,12 @@
             }
         ],
         "menus": {
+            "commandPalette": [
+                {
+                    "command": "unity-find-in-prefabs",
+                    "when": "editorLangId == csharp"
+                }
+            ],
             "editor/context": [
                 {
                     "when": "editorFocus",
