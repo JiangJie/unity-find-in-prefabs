@@ -41,13 +41,14 @@
             ],
             "editor/context": [
                 {
-                    "when": "editorFocus",
-                    "command": "unity-find-in-prefabs"
+                    "command": "unity-find-in-prefabs",
+                    "when": "editorFocus && editorLangId == csharp"
                 }
             ],
             "editor/title/context": [
                 {
-                    "command": "unity-find-in-prefabs"
+                    "command": "unity-find-in-prefabs",
+                    "when": "resourceLangId == csharp"
                 }
             ]
         }
