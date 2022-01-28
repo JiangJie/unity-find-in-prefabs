@@ -295,10 +295,7 @@ const showQuickPickByGUID = (guid: string) => {
         qucikPick.hide();
     });
     // open the file preview
-    qucikPick.onDidTriggerItemButton(event => {
-        // TODO: if(preview button)
-        vscode.window.showTextDocument(vscode.Uri.file(event.item.filePath));
-    });
+    qucikPick.onDidTriggerItemButton(event => (event.button.iconPath as vscode.ThemeIcon).id === 'open-preview' && vscode.window.showTextDocument(vscode.Uri.file(event.item.filePath)));
 
     qucikPick.show();
 };
