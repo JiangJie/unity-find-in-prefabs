@@ -269,6 +269,9 @@ const showQuickPickByGUID = (guid: string) => {
             label: path.basename(relativePath),
             description: dirname,
             buttons: [{
+                iconPath: new vscode.ThemeIcon('explorer-view-icon'),
+                tooltip: 'Reveal In Explorer'
+            }, {
                 iconPath: new vscode.ThemeIcon('open-preview'),
                 tooltip: 'Open Preview'
             }],
@@ -294,8 +297,17 @@ const showQuickPickByGUID = (guid: string) => {
 
         qucikPick.hide();
     });
-    // open the file preview
-    qucikPick.onDidTriggerItemButton(event => (event.button.iconPath as vscode.ThemeIcon).id === 'open-preview' && vscode.window.showTextDocument(vscode.Uri.file(event.item.filePath)));
+
+    qucikPick.onDidTriggerItemButton(event => {
+        const iconID = (event.button.iconPath as vscode.ThemeIcon).id;
+        const uri = vscode.Uri.file(event.item.filePath);
+
+        if (iconID === 'explorer-view-icon') {
+            vscode.commands.executeCommand('revealInExplorer', uri);
+        } else if (iconID === 'open-preview') {
+            vscode.window.showTextDocument(uri);
+        }
+    });
 
     qucikPick.show();
 };
