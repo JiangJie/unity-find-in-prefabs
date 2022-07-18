@@ -8,8 +8,9 @@ import * as vscode from 'vscode';
 const CommandID = 'unity-find-in-prefabs';
 
 const PrefabExtname = '.prefab';
+const SceneExtname = '.unity';
 const MetaExtname = '.meta';
-const AllPrefabsPattern = `**/*${ PrefabExtname }`;
+const AllPrefabsPattern = '**/*.{prefab,unity}';
 
 // the regexp of match script guid in prefab file
 const PrefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
@@ -65,9 +66,12 @@ const diffWithTwoSets = <T>(left: Set<T>, right: Set<T>) => ({
 });
 
 /**
- * whether an uri is a prefab file
+ * whether an uri is a prefab or scene file
  */
-const uriIsPrefabFile = (uri: vscode.Uri) => path.extname(uri.fsPath) === PrefabExtname;
+const uriIsPrefabOrSceneFile = (uri: vscode.Uri) => {
+    var extname = path.extname(uri.fsPath);
+    return extname === PrefabExtname || extname === SceneExtname;
+};
 
 /**
  * reset status
@@ -242,9 +246,9 @@ const getFileNameOfCsharpFile = () => path.basename(vscode.window.activeTextEdit
  */
 const watchAllPrefabFiles = () => {
     const watcher = vscode.workspace.createFileSystemWatcher(AllPrefabsPattern);
-    watcher.onDidCreate(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidChange(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidDelete(uri => uriIsPrefabFile(uri) && uppradeCacheWhenPrefabChange(uri, true));
+    watcher.onDidCreate(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidChange(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidDelete(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, true));
 };
 
 /**
