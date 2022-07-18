@@ -10,7 +10,7 @@
     },
     "repository": "https://github.com/JiangJie/unity-find-in-prefabs",
     "engines": {
-        "vscode": "^1.63.0"
+        "vscode": "^1.69.0"
     },
     "categories": [
         "Other"
