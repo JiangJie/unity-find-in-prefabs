@@ -51,7 +51,7 @@ const setAsBuiltCache = () => {
     }
     if (DeletedPrefabFilesWhenBuilding.size) {
         for (const uri of DeletedPrefabFilesWhenBuilding) {
-            updateCacheWhenDelectDocument(uri);
+            updateCacheWhenDeleteDocument(uri);
         }
         DeletedPrefabFilesWhenBuilding.clear();
     }
@@ -86,7 +86,7 @@ const reset = () => {
  * read all script'guid of given file
  */
 const readAllScriptGUIDsFromDocument = async (uri: vscode.Uri) => {
-    const guids: Set<string> = new Set();
+    const guidSet: Set<string> = new Set();
 
     try {
         const reader = fs.createReadStream(uri.fsPath);
@@ -98,13 +98,13 @@ const readAllScriptGUIDsFromDocument = async (uri: vscode.Uri) => {
         // ('\r\n') in input.txt as a single line break.
         for await (const line of rl) {
             const matcher = line.match(PrefabScriptGUIDReg);
-            if (matcher) guids.add(matcher[1]);
+            if (matcher) guidSet.add(matcher[1]);
         }
     } catch (err: any) {
         console.error(`Error from ${ CommandID } when read guids from document ${ uri.fsPath }:\n${ err.message }`);
     }
 
-    return guids;
+    return guidSet;
 };
 
 /**
@@ -119,9 +119,9 @@ const addPrefabToGUID = (guid: string, filePath: string) => {
 };
 
 /**
- * delect a prefab from GUIDWithinPrefabs
+ * delete a prefab from GUIDWithinPrefabs
  */
-const delectPrefabWithinGUID = (guid: string, filePath: string) => {
+const deletePrefabWithinGUID = (guid: string, filePath: string) => {
     if (!GUIDWithinPrefabs.has(guid)) return;
 
     const prefabs = GUIDWithinPrefabs.get(guid)!;
@@ -136,25 +136,25 @@ const delectPrefabWithinGUID = (guid: string, filePath: string) => {
  * read the prefab file then update GUIDWithinPrefabs and PrefabDependOnGUIDs
  */
 const readDocumentAndUpdateCache = async (uri: vscode.Uri) => {
-    const guids = await readAllScriptGUIDsFromDocument(uri);
-    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) || new Set() as Set<string>, guids);
+    const guidSet = await readAllScriptGUIDsFromDocument(uri);
+    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) || new Set() as Set<string>, guidSet);
 
-    diff.deleted.forEach(guid => delectPrefabWithinGUID(guid, uri.path));
+    diff.deleted.forEach(guid => deletePrefabWithinGUID(guid, uri.path));
     diff.added.forEach(guid => addPrefabToGUID(guid, uri.path));
 
-    guids.size ? PrefabDependOnGUIDs.set(uri.path, guids) : PrefabDependOnGUIDs.delete(uri.path);
+    guidSet.size ? PrefabDependOnGUIDs.set(uri.path, guidSet) : PrefabDependOnGUIDs.delete(uri.path);
 };
 
 /**
  * update GUIDWithinPrefabs and PrefabDependOnGUIDs when delete prefab file
  */
-const updateCacheWhenDelectDocument = (uri: vscode.Uri) => {
+const updateCacheWhenDeleteDocument = (uri: vscode.Uri) => {
     if (!PrefabDependOnGUIDs.has(uri.path)) return;
 
-    const guids = PrefabDependOnGUIDs.get(uri.path)!;
+    const guidSet = PrefabDependOnGUIDs.get(uri.path)!;
     PrefabDependOnGUIDs.delete(uri.path);
 
-    guids.forEach(guid => delectPrefabWithinGUID(guid, uri.path));
+    guidSet.forEach(guid => deletePrefabWithinGUID(guid, uri.path));
 };
 
 /**
@@ -195,9 +195,9 @@ const buildCache = async () => {
 };
 
 /**
- * upgrade cache when prefab file chnaged or added or deleted
+ * upgrade cache when prefab file changed or added or deleted
  */
-const uppradeCacheWhenPrefabChange = (uri: vscode.Uri, isDelete: boolean) => {
+const upgradeCacheWhenPrefabChange = (uri: vscode.Uri, isDelete: boolean) => {
     if (!CacheIsBuilt) {
         // record
         isDelete ? DeletedPrefabFilesWhenBuilding.add(uri) : ChangedPrefabFilesWhenBuilding.add(uri);
@@ -205,7 +205,7 @@ const uppradeCacheWhenPrefabChange = (uri: vscode.Uri, isDelete: boolean) => {
     }
 
     if (isDelete) {
-        updateCacheWhenDelectDocument(uri);
+        updateCacheWhenDeleteDocument(uri);
         return;
     }
 
@@ -216,7 +216,7 @@ const uppradeCacheWhenPrefabChange = (uri: vscode.Uri, isDelete: boolean) => {
  * get the C# file's guid
  */
 const getGUIDOfActiveCsharpFile = async () => {
-    // mabey file not exist
+    // maybe file not exist
     try {
         // read the right meta file of the C# file
         const reader = fs.createReadStream(`${ vscode.window.activeTextEditor!.document.uri.fsPath }${ MetaExtname }`);
@@ -246,9 +246,9 @@ const getFileNameOfCsharpFile = () => path.basename(vscode.window.activeTextEdit
  */
 const watchAllPrefabFiles = () => {
     const watcher = vscode.workspace.createFileSystemWatcher(AllPrefabsPattern);
-    watcher.onDidCreate(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidChange(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidDelete(uri => uriIsPrefabOrSceneFile(uri) && uppradeCacheWhenPrefabChange(uri, true));
+    watcher.onDidCreate(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidChange(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidDelete(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, true));
 };
 
 /**
@@ -259,10 +259,10 @@ const showQuickPickByGUID = (guid: string) => {
         filePath: string;
     }
 
-    const qucikPick = vscode.window.createQuickPick<WithFilePathQuickPickItem>();
+    const quickPick = vscode.window.createQuickPick<WithFilePathQuickPickItem>();
     let selectedLabel: string | null = null;
 
-    qucikPick.items = [...GUIDWithinPrefabs.get(guid)!].map(filePath => {
+    quickPick.items = [...GUIDWithinPrefabs.get(guid)!].map(filePath => {
         const relativePath = vscode.workspace.asRelativePath(filePath);
         let dirname = path.dirname(relativePath);
         dirname === '.' && (dirname = '');
@@ -283,26 +283,26 @@ const showQuickPickByGUID = (guid: string) => {
         };
     });
 
-    qucikPick.canSelectMany = false;
-    qucikPick.matchOnDescription = true;
-    qucikPick.title = `${ getFileNameOfCsharpFile() } be dependent by`;
-    qucikPick.placeholder = 'Select to copy a file name then you can open in Unity.';
+    quickPick.canSelectMany = false;
+    quickPick.matchOnDescription = true;
+    quickPick.title = `${ getFileNameOfCsharpFile() } be dependent by`;
+    quickPick.placeholder = 'Select to copy a file name then you can open in Unity.';
 
-    qucikPick.onDidHide(() => {
+    quickPick.onDidHide(() => {
         selectedLabel = null;
-        qucikPick.dispose();
+        quickPick.dispose();
     });
-    qucikPick.onDidChangeSelection(items => selectedLabel = items[0].label);
-    qucikPick.onDidAccept(() => {
+    quickPick.onDidChangeSelection(items => selectedLabel = items[0].label);
+    quickPick.onDidAccept(() => {
         if (selectedLabel) {
             // copy file name(not include extname) to clipboard
             vscode.env.clipboard.writeText(path.basename(selectedLabel, path.extname(selectedLabel)));
         }
 
-        qucikPick.hide();
+        quickPick.hide();
     });
 
-    qucikPick.onDidTriggerItemButton(event => {
+    quickPick.onDidTriggerItemButton(event => {
         const iconID = (event.button.iconPath as vscode.ThemeIcon).id;
         const uri = vscode.Uri.file(event.item.filePath);
 
@@ -313,7 +313,7 @@ const showQuickPickByGUID = (guid: string) => {
         }
     });
 
-    qucikPick.show();
+    quickPick.show();
 };
 
 // this method is called when your extension is activated
