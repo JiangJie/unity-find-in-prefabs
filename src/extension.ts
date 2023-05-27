@@ -100,6 +100,8 @@ const readAllScriptGUIDsFromDocument = async (uri: vscode.Uri) => {
             const matcher = line.match(PrefabScriptGUIDReg);
             if (matcher) guidSet.add(matcher[1]);
         }
+
+        reader.close();
     } catch (err: any) {
         console.error(`Error from ${ CommandID } when read guids from document ${ uri.fsPath }:\n${ err.message }`);
     }
