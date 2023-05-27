@@ -2,7 +2,7 @@
     "name": "unity-find-in-prefabs",
     "displayName": "Unity Find In Prefabs",
     "description": "Find prefabs which depend on the C# file",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "publisher": "jarvisjiang",
     "author": {
         "name": "Jarvis Jiang",
