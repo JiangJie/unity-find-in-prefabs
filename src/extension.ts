@@ -1,8 +1,8 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as fs from 'fs';
-import * as path from 'path';
-import * as readline from 'readline';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as readline from 'node:readline';
 import * as vscode from 'vscode';
 
 const CommandID = 'unity-find-in-prefabs';
@@ -22,26 +22,26 @@ const MetaGUIDReg = /(?:^|\s*)guid\s*:\s*([0-9a-f]{32})(?:\s*|$)/;
 
 // one-to-many: cache <script guid, prefab path set>
 // used for find
-const GUIDWithinPrefabs: Map<string, Set<string>> = new Map();
+const GUIDWithinPrefabs = new Map<string, Set<string>>();
 
 // one-to-many: cache <prefab path, script guid set>
 // used for update cache
-const PrefabDependOnGUIDs: Map<string, Set<string>> = new Map();
+const PrefabDependOnGUIDs = new Map<string, Set<string>>();
 
 /**
  * record updated or added prefab files when building cache
  */
-const ChangedPrefabFilesWhenBuilding: Set<vscode.Uri> = new Set();
+const ChangedPrefabFilesWhenBuilding = new Set<vscode.Uri>();
 
 /**
  * record deleted prefab files when building cache
  */
-const DeletedPrefabFilesWhenBuilding: Set<vscode.Uri> = new Set();
+const DeletedPrefabFilesWhenBuilding = new Set<vscode.Uri>();
 
 // whether cache is building or built
 let CacheIsBuilt = false;
 
-const setAsBuildingCache = () => CacheIsBuilt = false;
+const setAsBuildingCache = () => (CacheIsBuilt = false);
 const setAsBuiltCache = () => {
     CacheIsBuilt = true;
     // handle ChangedPrefabFilesWhenBuilding and DeletedPrefabFilesWhenBuilding records
@@ -61,8 +61,8 @@ const setAsBuiltCache = () => {
  * util function to diff two set
  */
 const diffWithTwoSets = <T>(left: Set<T>, right: Set<T>) => ({
-    deleted: [...left].filter(x => !right.has(x)),
-    added: [...right].filter(x => !left.has(x))
+    deleted: [...left].filter((x) => !right.has(x)),
+    added: [...right].filter((x) => !left.has(x)),
 });
 
 /**
@@ -92,13 +92,15 @@ const readAllScriptGUIDsFromDocument = async (uri: vscode.Uri) => {
         const reader = fs.createReadStream(uri.fsPath);
         const rl = readline.createInterface({
             input: reader,
-            crlfDelay: Infinity
+            crlfDelay: Infinity,
         });
         // Note: we use the crlfDelay option to recognize all instances of CR LF
         // ('\r\n') in input.txt as a single line break.
         for await (const line of rl) {
             const matcher = line.match(PrefabScriptGUIDReg);
-            if (matcher) guidSet.add(matcher[1]);
+            if (matcher) {
+                guidSet.add(matcher[1]);
+            }
         }
 
         rl.close();
@@ -125,7 +127,9 @@ const addPrefabToGUID = (guid: string, filePath: string) => {
  * delete a prefab from GUIDWithinPrefabs
  */
 const deletePrefabWithinGUID = (guid: string, filePath: string) => {
-    if (!GUIDWithinPrefabs.has(guid)) return;
+    if (!GUIDWithinPrefabs.has(guid)) {
+        return;
+    }
 
     const prefabs = GUIDWithinPrefabs.get(guid)!;
     prefabs.delete(filePath);
@@ -140,10 +144,10 @@ const deletePrefabWithinGUID = (guid: string, filePath: string) => {
  */
 const readDocumentAndUpdateCache = async (uri: vscode.Uri) => {
     const guidSet = await readAllScriptGUIDsFromDocument(uri);
-    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) || new Set() as Set<string>, guidSet);
+    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) || (new Set() as Set<string>), guidSet);
 
-    diff.deleted.forEach(guid => deletePrefabWithinGUID(guid, uri.path));
-    diff.added.forEach(guid => addPrefabToGUID(guid, uri.path));
+    diff.deleted.forEach((guid) => deletePrefabWithinGUID(guid, uri.path));
+    diff.added.forEach((guid) => addPrefabToGUID(guid, uri.path));
 
     guidSet.size ? PrefabDependOnGUIDs.set(uri.path, guidSet) : PrefabDependOnGUIDs.delete(uri.path);
 };
@@ -152,39 +156,45 @@ const readDocumentAndUpdateCache = async (uri: vscode.Uri) => {
  * update GUIDWithinPrefabs and PrefabDependOnGUIDs when delete prefab file
  */
 const updateCacheWhenDeleteDocument = (uri: vscode.Uri) => {
-    if (!PrefabDependOnGUIDs.has(uri.path)) return;
+    if (!PrefabDependOnGUIDs.has(uri.path)) {
+        return;
+    }
 
     const guidSet = PrefabDependOnGUIDs.get(uri.path)!;
     PrefabDependOnGUIDs.delete(uri.path);
 
-    guidSet.forEach(guid => deletePrefabWithinGUID(guid, uri.path));
+    guidSet.forEach((guid) => deletePrefabWithinGUID(guid, uri.path));
 };
 
 /**
  * update cache with given uri array or all prefabs of workspace
  */
-const updateCacheWithUris = (uris: vscode.Uri[] | null = null) => vscode.window.withProgress({
-    location: vscode.ProgressLocation.Window,
-    title: 'Unity: Find C# In Prefabs. Building cache',
-    cancellable: true
-}, async progress => {
-    setAsBuildingCache();
+const updateCacheWithUris = (uris: vscode.Uri[] | null = null) =>
+    vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Window,
+            title: 'Unity: Find C# In Prefabs. Building cache',
+            cancellable: true,
+        },
+        async (progress) => {
+            setAsBuildingCache();
 
-    progress.report({ increment: 0 });
+            progress.report({ increment: 0 });
 
-    let _uris = uris;
-    if (!_uris) {
-        // get all prefab files
-        _uris = await vscode.workspace.findFiles(AllPrefabsPattern, null);
-    }
+            let _uris = uris;
+            if (!_uris) {
+                // get all prefab files
+                _uris = await vscode.workspace.findFiles(AllPrefabsPattern, null);
+            }
 
-    for await (const uri of _uris) {
-        await readDocumentAndUpdateCache(uri);
-    }
+            for await (const uri of _uris) {
+                await readDocumentAndUpdateCache(uri);
+            }
 
-    progress.report({ increment: 100 });
-    setAsBuiltCache();
-});
+            progress.report({ increment: 100 });
+            setAsBuiltCache();
+        }
+    );
 
 /**
  * build guid and prefab files map cache
@@ -225,12 +235,14 @@ const getGUIDOfActiveCsharpFile = async () => {
         const reader = fs.createReadStream(`${ vscode.window.activeTextEditor!.document.uri.fsPath }${ MetaExtname }`);
         const rl = readline.createInterface({
             input: reader,
-            crlfDelay: Infinity
+            crlfDelay: Infinity,
         });
 
         for await (const line of rl) {
             const matcher = line.match(MetaGUIDReg);
-            if (matcher) return matcher[1];
+            if (matcher) {
+                return matcher[1];
+            }
         }
 
         return null;
@@ -249,9 +261,9 @@ const getFileNameOfCsharpFile = () => path.basename(vscode.window.activeTextEdit
  */
 const watchAllPrefabFiles = () => {
     const watcher = vscode.workspace.createFileSystemWatcher(AllPrefabsPattern);
-    watcher.onDidCreate(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidChange(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
-    watcher.onDidDelete(uri => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, true));
+    watcher.onDidCreate((uri) => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidChange((uri) => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, false));
+    watcher.onDidDelete((uri) => uriIsPrefabOrSceneFile(uri) && upgradeCacheWhenPrefabChange(uri, true));
 };
 
 /**
@@ -265,7 +277,7 @@ const showQuickPickByGUID = (guid: string) => {
     const quickPick = vscode.window.createQuickPick<WithFilePathQuickPickItem>();
     let selectedLabel: string | null = null;
 
-    quickPick.items = [...GUIDWithinPrefabs.get(guid)!].map(filePath => {
+    quickPick.items = [...GUIDWithinPrefabs.get(guid)!].map((filePath) => {
         const relativePath = vscode.workspace.asRelativePath(filePath);
         let dirname = path.dirname(relativePath);
         dirname === '.' && (dirname = '');
@@ -275,14 +287,17 @@ const showQuickPickByGUID = (guid: string) => {
         return {
             label: path.basename(relativePath),
             description: dirname,
-            buttons: [{
-                iconPath: new vscode.ThemeIcon('explorer-view-icon'),
-                tooltip: 'Reveal In Explorer'
-            }, {
-                iconPath: new vscode.ThemeIcon('open-preview'),
-                tooltip: 'Open Preview'
-            }],
-            filePath
+            buttons: [
+                {
+                    iconPath: new vscode.ThemeIcon('explorer-view-icon'),
+                    tooltip: 'Reveal In Explorer',
+                },
+                {
+                    iconPath: new vscode.ThemeIcon('open-preview'),
+                    tooltip: 'Open Preview',
+                },
+            ],
+            filePath,
         };
     });
 
@@ -295,7 +310,7 @@ const showQuickPickByGUID = (guid: string) => {
         selectedLabel = null;
         quickPick.dispose();
     });
-    quickPick.onDidChangeSelection(items => selectedLabel = items[0].label);
+    quickPick.onDidChangeSelection((items) => (selectedLabel = items[0].label));
     quickPick.onDidAccept(() => {
         if (selectedLabel) {
             // copy file name(not include extname) to clipboard
@@ -305,7 +320,7 @@ const showQuickPickByGUID = (guid: string) => {
         quickPick.hide();
     });
 
-    quickPick.onDidTriggerItemButton(event => {
+    quickPick.onDidTriggerItemButton((event) => {
         const iconID = (event.button.iconPath as vscode.ThemeIcon).id;
         const uri = vscode.Uri.file(event.item.filePath);
 
@@ -334,7 +349,9 @@ export const activate = (context: vscode.ExtensionContext) => {
     const disposable = vscode.commands.registerCommand(CommandID, async () => {
         // The code you place here will be executed every time your command is executed
         const { activeTextEditor } = vscode.window;
-        if (!activeTextEditor) return;
+        if (!activeTextEditor) {
+            return;
+        }
 
         const { document } = activeTextEditor;
 
