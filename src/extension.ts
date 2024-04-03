@@ -13,7 +13,7 @@ const MetaExtname = '.meta';
 const AllPrefabsPattern = '**/*.{prefab,unity}';
 
 // the regexp of match script guid in prefab file
-const PrefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[\s\S^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[\s\S^\}]+\}(?:\s*|$)/i;
+const PrefabScriptGUIDReg = /(?:^|\s*)m_Script\s*:\s*\{[^,]+,\s*guid\s*\:\s*([0-9a-f]{32})\s*[^\}]+\}(?:\s*|$)/g;
 
 // the regexp of match guid in meta file
 const MetaGUIDReg = /(?:^|\s*)guid\s*:\s*([0-9a-f]{32})(?:\s*|$)/;
@@ -86,27 +86,19 @@ const reset = () => {
  * read all script'guid of given file
  */
 const readAllScriptGUIDsFromDocument = async (uri: vscode.Uri) => {
-    const guidSet: Set<string> = new Set();
+    const guidSet = new Set<string>();
 
-    try {
-        const reader = fs.createReadStream(uri.fsPath);
-        const rl = readline.createInterface({
-            input: reader,
-            crlfDelay: Infinity,
-        });
-        // Note: we use the crlfDelay option to recognize all instances of CR LF
-        // ('\r\n') in input.txt as a single line break.
-        for await (const line of rl) {
-            const matcher = line.match(PrefabScriptGUIDReg);
-            if (matcher) {
-                guidSet.add(matcher[1]);
-            }
-        }
-
-        rl.close();
-        reader.close();
-    } catch (err: any) {
+    const data = await fs.promises.readFile(uri.fsPath, {
+        encoding: 'utf8',
+    }).catch(err => {
         console.error(`Error from ${ CommandID } when read guids from document ${ uri.fsPath }:\n${ err.message }`);
+    });
+
+    if (data) {
+        const matchers = data.matchAll(PrefabScriptGUIDReg);
+        for (const matcher of matchers) {
+            guidSet.add(matcher[1]);
+        }
     }
 
     return guidSet;
@@ -144,7 +136,7 @@ const deletePrefabWithinGUID = (guid: string, filePath: string) => {
  */
 const readDocumentAndUpdateCache = async (uri: vscode.Uri) => {
     const guidSet = await readAllScriptGUIDsFromDocument(uri);
-    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) || (new Set() as Set<string>), guidSet);
+    const diff = diffWithTwoSets(PrefabDependOnGUIDs.get(uri.path) ?? new Set<string>(), guidSet);
 
     diff.deleted.forEach((guid) => deletePrefabWithinGUID(guid, uri.path));
     diff.added.forEach((guid) => addPrefabToGUID(guid, uri.path));
@@ -181,15 +173,22 @@ const updateCacheWithUris = (uris: vscode.Uri[] | null = null) =>
 
             progress.report({ increment: 0 });
 
-            let _uris = uris;
-            if (!_uris) {
-                // get all prefab files
-                _uris = await vscode.workspace.findFiles(AllPrefabsPattern, null);
-            }
+            const globTimeLabel = 'unity-find-in-prefabs: glob cache';
+            console.time(globTimeLabel);
 
-            for await (const uri of _uris) {
+            // or get all prefab files
+            const allUris = uris ?? (await vscode.workspace.findFiles(AllPrefabsPattern, null));
+
+            console.timeEnd(globTimeLabel);
+
+            const buildTimeLabel = 'unity-find-in-prefabs: build cache';
+            console.time(buildTimeLabel);
+
+            for await (const uri of allUris) {
                 await readDocumentAndUpdateCache(uri);
             }
+
+            console.timeEnd(buildTimeLabel);
 
             progress.report({ increment: 100 });
             setAsBuiltCache();
