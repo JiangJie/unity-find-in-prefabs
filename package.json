@@ -2,7 +2,7 @@
     "name": "unity-find-in-prefabs",
     "displayName": "Unity Find In Prefabs",
     "description": "Find prefabs which depend on the C# file",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "publisher": "jarvisjiang",
     "author": {
         "name": "Jarvis Jiang",
@@ -10,7 +10,7 @@
     },
     "repository": "https://github.com/JiangJie/unity-find-in-prefabs",
     "engines": {
-        "vscode": "^1.87.0"
+        "vscode": "^1.69.0"
     },
     "categories": [
         "Other"
@@ -68,7 +68,7 @@
         "@types/glob": "^8.1.0",
         "@types/mocha": "^10.0.6",
         "@types/node": "^20.12.2",
-        "@types/vscode": "^1.87.0",
+        "@types/vscode": "^1.69.0",
         "@typescript-eslint/eslint-plugin": "^7.4.0",
         "@typescript-eslint/parser": "^7.4.0",
         "@vscode/test-electron": "^2.3.9",
